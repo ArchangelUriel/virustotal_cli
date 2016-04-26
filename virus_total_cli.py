@@ -9,18 +9,34 @@ import getopt
 from parser import URLScanHtmlParser
 from collections import Counter
 
-def show_analyzed_url_result(counter):
+is_complete_output_requested = False
+
+def show_analyzed_url_result(counter, results):
     
+    global is_complete_output_requested
+
     header_and_footer = '+'+('-'*20)+"+"
     
     print header_and_footer
-    header_and_footer = '+'+('-'*20)+"+"
     print "|       RESULT       |"        
     print header_and_footer
+    # Prints the compact result
     for element in counter:
         string_output = '| {0}: {1}'.format(element, counter[element])
         print "{0}{1}|".format(string_output,' '*((len(header_and_footer)-len(string_output))-1))
     print header_and_footer
+
+    # Prints the detailed list result
+    if is_complete_output_requested is True:
+        header_and_footer = '+'+('-'*40)+"+"
+        print header_and_footer
+        print "|            DETAILED RESULTS            |"
+        print header_and_footer
+        for result in results:
+            string_output = '|{0}: {1}'.format(result,results[result])
+            print "{0}{1}|".format(string_output,' '*((len(header_and_footer)-len(string_output))-1))
+        print header_and_footer
+
 
 def analyze_url(url):
     
@@ -45,23 +61,22 @@ def analyze_url(url):
         timestamp_link = json_object['timestamp']
         last_analysis_link = json_object['last_analysis_url']
 
-    
         http_request.request("GET", last_analysis_link)
-        
         html_data_response = http_request.getresponse().read() 
         parser = URLScanHtmlParser()
         parser.feed(html_data_response)
-        results = parser.get_results()
-        #for result in results:
-            #print "{0}: {1}".format(result, results[result]) 
+        results = parser.get_results() 
         result_counter = Counter(results.values())
-    show_analyzed_url_result(result_counter)
+        show_analyzed_url_result(result_counter, results)
+
+
 def main(argv):
-    
+   
+    global is_complete_output_requested 
     url_to_be_analyzed = None
 
     try:
-        opts, args = getopt.getopt(argv,"hu:",["url="])
+        opts, args = getopt.getopt(argv,"hu:v",["url="])
     except getopt.GetoptError:
         print "Invalid Argument, type virustotal.py -h"
         sys.exit(2)
@@ -72,7 +87,8 @@ def main(argv):
             sys.exit()
         elif opt in ("-u","--url"):
             url_to_be_analyzed = arg
-    
+        elif opt  == "-v":
+            is_complete_output_requested = True
     if url_to_be_analyzed != None:
         analyze_url(url_to_be_analyzed)
 
