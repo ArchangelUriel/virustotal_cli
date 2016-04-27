@@ -2,11 +2,14 @@
 
 import httplib
 import urllib
+import urllib2
 import json
 import time
 import sys
 import getopt
+import hashlib
 from parser import URLScanHtmlParser
+from parser import FileScanHtmlParser
 from collections import Counter
 
 is_complete_output_requested = False
@@ -69,14 +72,55 @@ def analyze_url(url):
         result_counter = Counter(results.values())
         show_analyzed_url_result(result_counter, results)
 
+def analyze_file(file_name):
+    sha256_file = None
+    json_data = None
+    
+    http_get_headers = {"Host":"www.virustotal.com",
+                        "Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                        "Accept-Encoding":"gzip, deflate, sdch",
+                        "Accept-Language":"en-US,en;q=0.8,it;q=0.6",
+                        "Connection":"close"
+                       }
+    sha256_file = hashlib.sha256(open(file_name,'rb').read()).hexdigest()
+    http_request = httplib.HTTPSConnection("www.virustotal.com")
+    http_request.request("GET","/it/file/upload/?sha256={0}".format(sha256_file))
+    json_data = http_request.getresponse().read()
+    print json_data    
+  
+    if json_data is not None:
+        json_object = json.loads(json_data)
+        file_exists = json_object['file_exists']
+        last_analysis_url = str(json_object['last_analysis_url'])
+        reanalyse_url = str(json_object['reanalyse_url'])
+        print reanalyse_url
+        if file_exists == True:
+            http_get_headers['GET'] = last_analysis_url
+            http_request = urllib2.Request("https://www.virustotal.com{0}".format(last_analysis_url), None, http_get_headers)
+            html_data = urllib2.urlopen(http_request).read()
+            parser = FileScanHtmlParser()
+            results = parser.get_results()
+            result_counter = Counter(results.values())
+            print results
+        else:
+            http_get_headers['GET'] = last_analysis_url
+            http_request = urllib2.Request("https://www.virustotal.com{0}".format(reanalyse_url),None,http_get_headers)
+            http_data = urllib2.urlopen(http_request).read()
+            #print http_data
+            parser = FileScanHtmlParser()
+            results = parser.get_results()
+            result_counter = Counter(results.values())
+            print results
+    
 
 def main(argv):
    
     global is_complete_output_requested 
     url_to_be_analyzed = None
+    file_to_be_analyzed = None
 
     try:
-        opts, args = getopt.getopt(argv,"hu:v",["url="])
+        opts, args = getopt.getopt(argv,"hu:f:v",["url=","file="])
     except getopt.GetoptError:
         print "Invalid Argument, type virustotal.py -h"
         sys.exit(2)
@@ -87,10 +131,16 @@ def main(argv):
             sys.exit()
         elif opt in ("-u","--url"):
             url_to_be_analyzed = arg
+        elif opt in ("-f","--file"):
+            file_to_be_analyzed = arg
         elif opt  == "-v":
             is_complete_output_requested = True
+       
+    
     if url_to_be_analyzed != None:
         analyze_url(url_to_be_analyzed)
+    if file_to_be_analyzed != None:
+        analyze_file(file_to_be_analyzed)
 
 if __name__ == '__main__':
     main(sys.argv[1:])
